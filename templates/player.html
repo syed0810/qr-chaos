@@ -1,12 +1,489 @@
-<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>QR Chaos</title><link rel="stylesheet" href="/static/style.css"></head>
-<body><main class="card game"><div class="top"><span>⚡ QR CHAOS</span><span id="score">0 pts</span></div><div id="screen"><h1>Waiting...</h1><p>You're in. Wait for the host to start.</p></div></main>
+<!doctype html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>QR Chaos</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+<main class="card game">
+
+    <div class="top">
+        <span>⚡ QR CHAOS</span>
+        <span id="score">0 pts</span>
+    </div>
+
+    <div id="screen">
+        <h1>Waiting...</h1>
+        <p>You're in. Wait for the host to start.</p>
+    </div>
+
+</main>
+
 <script>
-let challenge={}, answered=false;
-async function state(){try{let s=await (await fetch('/state',{cache:'no-store'})).json(),g=s.game,p=s.player;document.getElementById('score').innerText=(p?p.score:0)+' pts';if(!p){location='/';return}if(g.status==='lobby'){screen.innerHTML='<h1>🎮 You’re in!</h1><p>Waiting for the host to start...</p>';return}if(g.status==='paused'){screen.innerHTML='<h1>⏸ PAUSED</h1><p>Hang on...</p>';return}if(g.status==='finished'){screen.innerHTML='<h1>🏆 GAME OVER</h1><p>Check the leaderboard on the host screen.</p>';return}render(g.round_no)}catch(e){screen.innerHTML='<h1>Reconnecting…</h1><p>Trying the game server again.</p>'}}
-async function render(n){if(answered&&window.lastRound===n)return;window.lastRound=n;answered=false;let data=JSON.parse(localStorage.getItem('challenge_'+n)||'null');if(!data){data=await (await fetch('/challenge',{cache:'no-store'})).json();localStorage.setItem('challenge_'+n,JSON.stringify(data))}challenge=data;let s=await (await fetch('/state',{cache:'no-store'})).json(),round=s.rounds[n-1];if(!round)return;let html=`<div class="badge">ROUND ${n}</div><h1>${round.name}</h1>`;if(round.kind==='reaction')html+=`<p>Wait... then hit the button as fast as possible.</p><button id="react" class="big danger">WAIT...</button>`;if(round.kind==='memory')html+=`<p>Memorize this for 4 seconds:</p><div class="memory">${data.nums.join(' • ')}</div><div id="memAnswer"></div>`;if(round.kind==='spot')html+=`<p>Which color was requested?</p><div class="colorbox ${data.target}"></div><div class="choices">${['red','blue','green','yellow'].map(x=>`<button onclick="answer('${x}',${x===data.target?200:0})">${x.toUpperCase()}</button>`).join('')}</div>`;if(round.kind==='sequence')html+=`<p>Tap these numbers in order as fast as possible:</p><div class="sequence">${data.sequence.map(x=>`<button onclick="seq(${x})">${x}</button>`).join('')}</div><p id="seqmsg"></p>`;if(round.kind==='chaos')html+=`<p>Type this backwards:</p><h2>${data.word}</h2><input id="chaos" autocomplete="off"><button onclick="checkChaos('${data.word}')">SUBMIT</button>`;if(round.kind==='final')html+=`<p>Final climb: choose your risk.</p><button onclick="answer('safe',100)">SAFE +100</button><button onclick="answer('risk',400)">RISK +400</button><button onclick="answer('insane',800)">INSANE +800</button>`;screen.innerHTML=html;if(round.kind==='reaction'){let b=document.getElementById('react');let delay=1200+Math.random()*2500;setTimeout(()=>{if(answered||window.lastRound!==n)return;b.innerText='TAP!';b.className='big good';let t=performance.now();b.onclick=()=>{if(answered)return;let ms=performance.now()-t;answer('tap',Math.max(30,Math.round(350-ms/4))) }},delay)}if(round.kind==='memory'){setTimeout(()=>{let m=document.querySelector('.memory');if(!m||answered||window.lastRound!==n)return;m.innerText='?  ?  ?  ?  ?';document.getElementById('memAnswer').innerHTML='<input id="mem" inputmode="numeric" placeholder="12345"><button onclick="answerMem()">SUBMIT</button>'},4000)}}
-function answer(a,p){if(answered)return;answered=true;fetch('/score',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({points:p})});screen.innerHTML=`<h1>${p>0?'✅ NICE!':'❌ MISSED'}</h1><p>${p>0?'+'+p+' points':'0 points'}</p><p>Waiting for next round...</p>`}
-function answerMem(){let a=document.getElementById('mem').value.trim();answer('',a===challenge.nums.join('')?250:0)}
-function checkChaos(w){let a=document.getElementById('chaos').value.trim().toUpperCase();answer('',a===w.split('').reverse().join('')?200:0)}
-let current=[],idx=0;function seq(x){if(answered)return;if(!current.length){current=challenge.sequence;idx=0}if(x===current[idx]){idx++;if(idx===current.length)answer('',300)}else{let m=document.getElementById('seqmsg');if(m)m.innerText='❌ Wrong!';answer('',0)}}
-setInterval(()=>fetch('/heartbeat',{method:'POST'}),3000);setInterval(state,1000);state();
-</script></body></html>
+let challenge = {};
+let answered = false;
+
+const screen = document.getElementById("screen");
+const score = document.getElementById("score");
+
+
+async function state() {
+    try {
+        const response = await fetch("/state", {
+            cache: "no-store"
+        });
+
+        const s = await response.json();
+
+        const g = s.game;
+        const p = s.player;
+
+        if (p) {
+            score.innerText = (p.score || 0) + " pts";
+        } else {
+            window.location = "/";
+            return;
+        }
+
+        if (g.status === "lobby") {
+            screen.innerHTML = `
+                <h1>🎮 You're in!</h1>
+                <p>Waiting for the host to start...</p>
+            `;
+            return;
+        }
+
+        if (g.status === "paused") {
+            screen.innerHTML = `
+                <h1>⏸ PAUSED</h1>
+                <p>Hang on...</p>
+            `;
+            return;
+        }
+
+        if (g.status === "finished") {
+            screen.innerHTML = `
+                <h1>🏆 GAME OVER</h1>
+                <p>Check the leaderboard on the host screen.</p>
+            `;
+            return;
+        }
+
+        await render(g.round_no);
+
+    } catch (e) {
+        console.error(e);
+
+        screen.innerHTML = `
+            <h1>Reconnecting...</h1>
+            <p>Trying the game server again.</p>
+        `;
+    }
+}
+
+
+async function render(n) {
+
+    if (answered && window.lastRound === n) {
+        return;
+    }
+
+    window.lastRound = n;
+    answered = false;
+
+    let data = JSON.parse(
+        localStorage.getItem("challenge_" + n) || "null"
+    );
+
+    if (!data) {
+        data = await (
+            await fetch("/challenge", {
+                cache: "no-store"
+            })
+        ).json();
+
+        localStorage.setItem(
+            "challenge_" + n,
+            JSON.stringify(data)
+        );
+    }
+
+    challenge = data;
+
+    const stateResponse = await fetch("/state", {
+        cache: "no-store"
+    });
+
+    const s = await stateResponse.json();
+
+    const round = s.rounds[n - 1];
+
+    if (!round) {
+        return;
+    }
+
+    let html = `
+        <div class="badge">ROUND ${n}</div>
+        <h1>${round.name}</h1>
+    `;
+
+
+    /* REACTION ROUND */
+
+    if (round.kind === "reaction") {
+
+        html += `
+            <p>
+                Wait... then hit the button as fast as possible.
+            </p>
+
+            <button id="react" class="big danger">
+                WAIT...
+            </button>
+        `;
+    }
+
+
+    /* MEMORY ROUND */
+
+    if (round.kind === "memory") {
+
+        html += `
+            <p>Memorize this for 4 seconds:</p>
+
+            <div class="memory">
+                ${data.nums.join(" • ")}
+            </div>
+
+            <div id="memAnswer"></div>
+        `;
+    }
+
+
+    /* COLOR ROUND */
+
+    if (round.kind === "spot") {
+
+        html += `
+            <p>Which color was requested?</p>
+
+            <div class="colorbox ${data.target}"></div>
+
+            <div class="choices">
+                ${["red", "blue", "green", "yellow"]
+                    .map(color => `
+                        <button
+                            onclick="answer(
+                                '${color}',
+                                ${color === data.target ? 200 : 0}
+                            )"
+                        >
+                            ${color.toUpperCase()}
+                        </button>
+                    `)
+                    .join("")}
+            </div>
+        `;
+    }
+
+
+    /* SEQUENCE ROUND */
+
+    if (round.kind === "sequence") {
+
+        html += `
+            <p>
+                Tap these numbers in order as fast as possible:
+            </p>
+
+            <div class="sequence">
+                ${data.sequence
+                    .map(x => `
+                        <button onclick="seq(${x})">
+                            ${x}
+                        </button>
+                    `)
+                    .join("")}
+            </div>
+
+            <p id="seqmsg"></p>
+        `;
+    }
+
+
+    /* CHAOS ROUND */
+
+    if (round.kind === "chaos") {
+
+        html += `
+            <p>Type this backwards:</p>
+
+            <h2>${data.word}</h2>
+
+            <input
+                id="chaos"
+                autocomplete="off"
+                spellcheck="false"
+            >
+
+            <button onclick="checkChaos('${data.word}')">
+                SUBMIT
+            </button>
+        `;
+    }
+
+
+    /* FINAL ROUND */
+
+    if (round.kind === "final") {
+
+        html += `
+            <p>
+                Final climb: choose your risk.
+            </p>
+
+            <button onclick="answer('safe', 100)">
+                SAFE +100
+            </button>
+
+            <button onclick="answer('risk', 400)">
+                RISK +400
+            </button>
+
+            <button onclick="answer('insane', 800)">
+                INSANE +800
+            </button>
+        `;
+    }
+
+
+    screen.innerHTML = html;
+
+
+    /* REACTION TIMER */
+
+    if (round.kind === "reaction") {
+
+        const button = document.getElementById("react");
+
+        const delay = 1200 + Math.random() * 2500;
+
+        setTimeout(() => {
+
+            if (
+                answered ||
+                window.lastRound !== n
+            ) {
+                return;
+            }
+
+            button.innerText = "TAP!";
+            button.className = "big good";
+
+            const startTime = performance.now();
+
+            button.onclick = () => {
+
+                if (answered) {
+                    return;
+                }
+
+                const milliseconds =
+                    performance.now() - startTime;
+
+                const points = Math.max(
+                    30,
+                    Math.round(350 - milliseconds / 4)
+                );
+
+                answer("tap", points);
+            };
+
+        }, delay);
+    }
+
+
+    /* MEMORY TIMER */
+
+    if (round.kind === "memory") {
+
+        setTimeout(() => {
+
+            const memory =
+                document.querySelector(".memory");
+
+            if (
+                !memory ||
+                answered ||
+                window.lastRound !== n
+            ) {
+                return;
+            }
+
+            memory.innerText = "?  ?  ?  ?  ?";
+
+            document.getElementById("memAnswer").innerHTML = `
+                <input
+                    id="mem"
+                    inputmode="numeric"
+                    placeholder="12345"
+                >
+
+                <button onclick="answerMem()">
+                    SUBMIT
+                </button>
+            `;
+
+        }, 4000);
+    }
+}
+
+
+/* NORMAL ANSWER */
+
+function answer(a, points) {
+
+    if (answered) {
+        return;
+    }
+
+    answered = true;
+
+    fetch("/score", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+            points: points
+        })
+    }).catch(error => {
+        console.error("Score error:", error);
+    });
+
+    screen.innerHTML = `
+        <h1>
+            ${points > 0 ? "✅ NICE!" : "❌ MISSED"}
+        </h1>
+
+        <p>
+            ${points > 0 ? "+" + points + " points" : "0 points"}
+        </p>
+
+        <p>
+            Waiting for next round...
+        </p>
+    `;
+}
+
+
+/* MEMORY ANSWER */
+
+function answerMem() {
+
+    const input =
+        document.getElementById("mem");
+
+    if (!input) {
+        return;
+    }
+
+    const answerValue =
+        input.value.trim();
+
+    const correct =
+        answerValue === challenge.nums.join("");
+
+    answer("", correct ? 250 : 0);
+}
+
+
+/* CHAOS ANSWER */
+
+function checkChaos(word) {
+
+    const input =
+        document.getElementById("chaos");
+
+    if (!input) {
+        return;
+    }
+
+    const value =
+        input.value.trim().toUpperCase();
+
+    const correct =
+        value ===
+        word.split("").reverse().join("").toUpperCase();
+
+    answer("", correct ? 200 : 0);
+}
+
+
+/* SEQUENCE ROUND */
+
+let current = [];
+let idx = 0;
+
+function seq(x) {
+
+    if (answered) {
+        return;
+    }
+
+    if (!current.length) {
+        current = challenge.sequence;
+        idx = 0;
+    }
+
+    if (x === current[idx]) {
+
+        idx++;
+
+        if (idx === current.length) {
+            answer("", 300);
+        }
+
+    } else {
+
+        const message =
+            document.getElementById("seqmsg");
+
+        if (message) {
+            message.innerText = "❌ Wrong!";
+        }
+
+        answer("", 0);
+    }
+}
+
+
+/* HEARTBEAT */
+
+setInterval(() => {
+
+    fetch("/heartbeat", {
+        method: "POST"
+    }).catch(() => {});
+
+}, 3000);
+
+
+/* CHECK GAME STATE */
+
+setInterval(() => {
+
+    state();
+
+}, 1000);
+
+
+/* START */
+
+state();
+
+</script>
+</body>
+</html>
