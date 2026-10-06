@@ -1,0 +1,5 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>QR Chaos</title><link rel="stylesheet" href="/static/style.css"></head>
+<body><main class="card"><div class="logo">⚡ QR CHAOS</div><h1>JOIN THE GAME</h1><p>Use your own mobile data. No shared Wi-Fi is required.</p><input id="name" maxlength="24" placeholder="Your name" autocomplete="off"><button class="primary" onclick="join()">JOIN</button><p id="msg"></p></main>
+<script>
+async function join(){let name=document.getElementById('name').value.trim();if(!name){msg.innerText='Enter your name.';return}let r=await fetch('/join',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});let j=await r.json();if(j.ok)location='/player';else msg.innerText=j.error||'Could not join.'}
+</script></body></html>

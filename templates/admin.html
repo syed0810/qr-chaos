@@ -1,0 +1,9 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>QR Chaos Admin</title><link rel="stylesheet" href="/static/style.css"></head>
+<body><main class="admin"><section class="panel qrpanel"><h1>⚡ QR CHAOS</h1><p>Players scan this ONE QR to join.</p><div id="qr" class="qr"><img src="/join-qr.png" alt="Join QR"></div><code id="url">{{join_url}}</code><div class="controls"><button class="primary" onclick="cmd('/admin/start')">▶ START</button><button onclick="cmd('/admin/pause')">⏸ PAUSE</button><button onclick="cmd('/admin/resume')">▶ RESUME</button><button onclick="cmd('/admin/next')">NEXT ROUND →</button><button class="dangerbtn" onclick="resetGame()">RESET</button></div></section>
+<section class="panel"><div class="stats"><div><b id="count">0</b><small>PLAYERS</small></div><div><b id="round">LOBBY</b><small>STATUS</small></div></div><h2>🏆 LEADERBOARD</h2><table><thead><tr><th>#</th><th>PLAYER</th><th>POINTS</th><th>STATUS</th></tr></thead><tbody id="board"></tbody></table></section></main>
+<script>
+async function cmd(url){await fetch(url,{method:'POST'});load()}
+async function resetGame(){if(confirm('Reset game and remove all players?')){await fetch('/admin/reset',{method:'POST'});load()}}
+async function load(){let p=await (await fetch('/players')).json();p.forEach(x=>x.connected=(Date.now()/1000-x.last_seen)<8);count.innerText=p.length;board.innerHTML=p.slice().sort((a,b)=>b.score-a.score||a.id-b.id).map((x,i)=>`<tr><td>${i+1}</td><td>${esc(x.name)}</td><td><b>${x.score}</b></td><td>${x.connected?'🟢 Online':'⚪ Offline'}</td></tr>`).join('');let s=await (await fetch('/state')).json();round.innerText=s.game.status==='live'?'ROUND '+Math.min(s.game.round_no,6):s.game.status.toUpperCase()}
+function esc(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}setInterval(load,1000);load();
+</script></body></html>
